@@ -2,37 +2,11 @@ var http = require("http");
 var fs = require("fs");
 var url = require("url"); //url 모듈
 var qs = require('querystring');
+var template = require('./lib/template.js');
+var path = require('path');
+var sanitizeHtml= require('sanitize-html');
+const sanitize = require("sanitize-html");
 
-var template={
-  html: function(title, list, body, control) {
-    return `
-      <!doctype html>
-      <html>
-      <head>
-      <title>WEB1 - ${title}</title>
-      <meta charset="utf-8">
-      </head>
-      <body>
-      <h1><a href="/">WEB1</a></h1>
-      ${list}
-      ${control}
-      ${body}
-      </body>
-      </html>
-    `;
-  },
-
-  list: function(filelist) {
-    var list = "<ul>";
-    var i = 0;
-    while (i < filelist.length) {
-      list = list + `<li><a href="/?id=${filelist[i]}">${filelist[i]}</a></li>`;
-      i = i + 1;
-    }
-    list = list + "</ul>";
-    return list;
-  }
-}
 
 
 
@@ -57,21 +31,27 @@ var app = http.createServer(function (request, response) {
       });
     } else {
       fs.readdir("./data", function (errpr, filelist) {
+        //경로 세탁
+        var filteredId = path.parse(queryData.id).base
         var list = "<ul>";
         var list = template.list(filelist);
         fs.readFile(
-          `./data/${queryData.id}`,
+          `./data/${filteredId}`,
           "utf-8",
           function (err, description) {
+            var sanitizedDescription=sanitizeHtml(description, {
+              allowedTags:['h1']
+            });
             var title = queryData.id;
+            var sanitizedTitle=sanitizeHtml(title);
             var html = template.html(
               title,
               list,
-              `<h2>${title}</h2>${description}`,
+              `<h2>${sanitizedTitle}</h2>${sanitizedDescription}`,
               `<a href="/create">create</a>
-               <a href="/update?id=${title}">update</a>
+               <a href="/update?id=${sanitizedTitle}">update</a>
                <form action="delete_process" method="post">
-                <input type="hidden" name="id" value="${title}">
+                <input type="hidden" name="id" value="${sanitizedTitle}">
                 <input type="submit" value="delete">
                </form>
                `
@@ -125,7 +105,9 @@ var app = http.createServer(function (request, response) {
       
   } else if(pathname === '/update'){
     fs.readdir("./data", function (errpr, filelist) {
-        fs.readFile(`data/${queryData.id}`, 'utf-8', function(err, description){
+      var filteredId = path.parse(queryData.id).base
+       
+      fs.readFile(`data/${filteredId}`, 'utf-8', function(err, description){
         var title = queryData.id;
         var list = template.list(filelist);
         var html = template.html(
@@ -177,8 +159,9 @@ var app = http.createServer(function (request, response) {
     request.on('end', function(){
       var post=qs.parse(body);
       var id=post.id;
+      var filteredId=path.parse(id).base;
       console.log(id);
-      fs.unlink(`data/${id}`, function(error){
+      fs.unlink(`data/${filteredId}`, function(error){
         response.writeHead(302, {Location: `/`});
         response.end();
       });
